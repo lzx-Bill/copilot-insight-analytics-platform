@@ -298,3 +298,64 @@ export const conversationApi = {
     return apiClient.get('/conversations/stats/messages', { params });
   },
 };
+
+// ============ 标签管理 API ============
+
+export interface CategoryTag {
+  id: string;
+  tag_name: string;
+  tag_type: 'domain' | 'project' | 'intent';
+  original_values: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTagData {
+  tag_name: string;
+  tag_type: 'domain' | 'project' | 'intent';
+  original_values: string[];
+}
+
+export interface UpdateTagData {
+  tag_name?: string;
+  original_values?: string[];
+}
+
+export interface AvailableValues {
+  tag_type: string;
+  available_values: string[];
+  assigned_values: string[];
+  all_values: string[];
+}
+
+export const tagApi = {
+  // 获取标签列表
+  list: async (tagType?: string): Promise<CategoryTag[]> => {
+    return apiClient.get('/tags/', { params: tagType ? { tag_type: tagType } : {} });
+  },
+
+  // 创建标签
+  create: async (data: CreateTagData): Promise<CategoryTag> => {
+    return apiClient.post('/tags/', data);
+  },
+
+  // 更新标签
+  update: async (tagId: string, data: UpdateTagData): Promise<CategoryTag> => {
+    return apiClient.put(`/tags/${tagId}`, data);
+  },
+
+  // 删除标签
+  delete: async (tagId: string): Promise<{ success: boolean; message: string }> => {
+    return apiClient.delete(`/tags/${tagId}`);
+  },
+
+  // 获取可用值
+  getAvailableValues: async (tagType: string): Promise<AvailableValues> => {
+    return apiClient.get(`/tags/available-values/${tagType}`);
+  },
+
+  // 获取标签映射
+  getMapping: async (tagType: string): Promise<{ tag_type: string; mapping: Record<string, string> }> => {
+    return apiClient.get(`/tags/mapping/${tagType}`);
+  },
+};

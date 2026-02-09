@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.db.mongodb import connect_to_mongo, close_mongo_connection
 from app.api.v1.conversations import router as conversations_router
+from app.api.v1.tags import router as tags_router
 
 
 # 设置日志
@@ -48,6 +49,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(conversations_router, prefix=settings.API_V1_PREFIX)
+app.include_router(tags_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")

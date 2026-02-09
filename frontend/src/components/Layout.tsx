@@ -6,6 +6,7 @@ import {
   ImportOutlined,
   SearchOutlined,
   BarChartOutlined,
+  TagsOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = AntLayout;
@@ -43,6 +44,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/analytics',
       icon: <BarChartOutlined />,
       label: '数据分析',
+    },
+    {
+      key: '/tags',
+      icon: <TagsOutlined />,
+      label: '标签管理',
     },
   ];
 

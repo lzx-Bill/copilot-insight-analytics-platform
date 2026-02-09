@@ -12,6 +12,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.services.parser import CopilotParser, ParseResult
 from app.db.mongodb import get_database
+from app.models.category_tag import CategoryTag
 from loguru import logger
 
 # 常量配置
@@ -30,6 +31,119 @@ async def run_aggregation(pipeline: list) -> list:
     collection = db["conversations"]
     cursor = collection.aggregate(pipeline)
     return await cursor.to_list(length=None)
+
+
+async def get_tag_mappings(tag_type: str) -> dict:
+    """
+    获取某类型的标签映射: { original_value -> tag_name }
+    """
+    tags = await CategoryTag.find({"tag_type": tag_type}).to_list()
+    mapping = {}
+    for tag in tags:
+        for val in tag.original_values:
+            mapping[val] = tag.tag_name
+    return mapping
+
+
+async def get_all_tag_mappings() -> dict:
+    """
+    获取所有类型的标签映射
+    返回: { "domain": {...}, "project": {...}, "intent": {...} }
+    """
+    tags = await CategoryTag.find({}).to_list()
+    mappings = {"domain": {}, "project": {}, "intent": {}}
+    for tag in tags:
+        if tag.tag_type in mappings:
+            for val in tag.original_values:
+                mappings[tag.tag_type][val] = tag.tag_name
+    return mappings
+
+
+async def get_reverse_tag_mapping(tag_type: str) -> dict:
+    """
+    获取某类型的反向标签映射: { tag_name -> [original_values] }
+    """
+    tags = await CategoryTag.find({"tag_type": tag_type}).to_list()
+    reverse = {}
+    for tag in tags:
+        reverse[tag.tag_name] = tag.original_values
+    return reverse
+
+
+def apply_tag_mapping_to_distribution(results: list, mapping: dict) -> list:
+    """
+    将分布统计结果按标签映射合并
+    原始值如果有对应标签则合并到标签下，未映射的保持原样
+    """
+    merged = {}
+    for item in results:
+        original_name = item.get("_id")
+        # 查找是否有标签映射
+        tag_name = mapping.get(original_name, original_name)
+        
+        if tag_name in merged:
+            # 合并到已存在的标签中
+            merged[tag_name]["count"] = merged[tag_name].get("count", 0) + item.get("count", 0)
+            if "total_cost" in item:
+                merged[tag_name]["total_cost"] = merged[tag_name].get("total_cost", 0) + (item.get("total_cost") or 0)
+            if "total_tokens" in item:
+                merged[tag_name]["total_tokens"] = merged[tag_name].get("total_tokens", 0) + (item.get("total_tokens") or 0)
+            if "avg_response_time" in item:
+                # 对平均值进行加权平均
+                existing_count = merged[tag_name].get("_merge_count", 1)
+                new_count = existing_count + 1
+                existing_avg = merged[tag_name].get("avg_response_time") or 0
+                new_avg = item.get("avg_response_time") or 0
+                merged[tag_name]["avg_response_time"] = (existing_avg * existing_count + new_avg) / new_count
+                merged[tag_name]["_merge_count"] = new_count
+        else:
+            merged[tag_name] = {**item, "_id": tag_name}
+    
+    # 清理临时字段并排序
+    result = []
+    for item in merged.values():
+        item.pop("_merge_count", None)
+        result.append(item)
+    
+    result.sort(key=lambda x: x.get("count", 0), reverse=True)
+    return result
+
+
+async def expand_filter_value(tag_type: str, value: str) -> list:
+    """
+    如果 value 是一个标签名，展开为原始值列表；否则返回 [value]
+    """
+    reverse = await get_reverse_tag_mapping(tag_type)
+    if value in reverse:
+        return reverse[value]
+    return [value]
+
+
+async def build_domain_filter(domain_value: str) -> dict:
+    """构建领域筛选条件，支持标签展开"""
+    expanded = await expand_filter_value("domain", domain_value)
+    if len(expanded) == 1:
+        return {"metadata.domain": {"$regex": expanded[0], "$options": "i"}}
+    else:
+        return {"metadata.domain": {"$in": expanded}}
+
+
+async def build_project_filter(project_value: str) -> dict:
+    """构建项目筛选条件，支持标签展开"""
+    expanded = await expand_filter_value("project", project_value)
+    if len(expanded) == 1:
+        return {"project_name": {"$regex": expanded[0], "$options": "i"}}
+    else:
+        return {"project_name": {"$in": expanded}}
+
+
+async def build_intent_filter(intent_value: str) -> dict:
+    """构建意图筛选条件，支持标签展开"""
+    expanded = await expand_filter_value("intent", intent_value)
+    if len(expanded) == 1:
+        return {"metadata.intent_type": expanded[0]}
+    else:
+        return {"metadata.intent_type": {"$in": expanded}}
 
 
 def compute_content_hash(user_input: str, assistant_response: str) -> str:
@@ -397,15 +511,17 @@ async def list_conversations(
     """
     query = {}
     
-    # 基础筛选
+    # 基础筛选 - 支持标签展开
     if domain:
-        query["metadata.domain"] = {"$regex": domain, "$options": "i"}
+        domain_filter = await build_domain_filter(domain)
+        query.update(domain_filter)
     if session_id:
         query["session_id"] = session_id
     if model:
         query["metadata.model"] = {"$regex": model, "$options": "i"}
     if intent_type:
-        query["metadata.intent_type"] = intent_type
+        intent_filter = await build_intent_filter(intent_type)
+        query.update(intent_filter)
     if complexity_level:
         query["metadata.complexity_level"] = complexity_level
     if has_error is not None:
@@ -413,7 +529,8 @@ async def list_conversations(
     if is_favorite is not None:
         query["is_favorite"] = is_favorite
     if project_name:
-        query["project_name"] = {"$regex": project_name, "$options": "i"}
+        project_filter = await build_project_filter(project_name)
+        query.update(project_filter)
     
     # 标签筛选
     if tags:
@@ -467,13 +584,16 @@ async def count_conversations(
     query = {}
     
     if domain:
-        query["metadata.domain"] = {"$regex": domain, "$options": "i"}
+        domain_filter = await build_domain_filter(domain)
+        query.update(domain_filter)
     if model:
         query["metadata.model"] = {"$regex": model, "$options": "i"}
     if intent_type:
-        query["metadata.intent_type"] = intent_type
+        intent_filter = await build_intent_filter(intent_type)
+        query.update(intent_filter)
     if project_name:
-        query["project_name"] = {"$regex": project_name, "$options": "i"}
+        project_filter = await build_project_filter(project_name)
+        query.update(project_filter)
     if search:
         query["$or"] = [
             {"conversation.user_input": {"$regex": search, "$options": "i"}},
@@ -501,7 +621,7 @@ async def count_conversations(
 
 @router.get("/filters/options")
 async def get_filter_options():
-    """获取可用的筛选选项"""
+    """获取可用的筛选选项（已应用标签映射）"""
     # 获取所有唯一的领域
     domains = await run_aggregation([
         {"$group": {"_id": "$metadata.domain"}},
@@ -530,12 +650,55 @@ async def get_filter_options():
         {"$sort": {"_id": 1}}
     ])
     
+    # 获取所有唯一的意图类型
+    intent_types_raw = await run_aggregation([
+        {"$group": {"_id": "$metadata.intent_type"}},
+        {"$match": {"_id": {"$ne": None}}},
+        {"$sort": {"_id": 1}}
+    ])
+    
+    # 获取标签映射
+    all_mappings = await get_all_tag_mappings()
+    domain_mapping = all_mappings["domain"]
+    project_mapping = all_mappings["project"]
+    intent_mapping = all_mappings["intent"]
+    
+    # 应用领域标签映射：替换被归类的原始值为标签名
+    domain_set = set()
+    for d in domains:
+        val = d["_id"]
+        if val:
+            if val in domain_mapping:
+                domain_set.add(domain_mapping[val])
+            else:
+                domain_set.add(val)
+    
+    # 应用项目标签映射
+    project_set = set()
+    for p in project_names:
+        val = p["_id"]
+        if val:
+            if val in project_mapping:
+                project_set.add(project_mapping[val])
+            else:
+                project_set.add(val)
+    
+    # 应用意图标签映射
+    intent_set = set()
+    for i in intent_types_raw:
+        val = i["_id"]
+        if val:
+            if val in intent_mapping:
+                intent_set.add(intent_mapping[val])
+            else:
+                intent_set.add(val)
+    
     return {
-        "domains": [d["_id"] for d in domains if d["_id"]],
+        "domains": sorted(domain_set),
         "models": [m["_id"] for m in models if m["_id"]],
         "tags": [t["_id"] for t in tags if t["_id"]],
-        "project_names": [p["_id"] for p in project_names if p["_id"]],
-        "intent_types": ["debug", "implement", "refactor", "explain", "research", "optimize"],
+        "project_names": sorted(project_set),
+        "intent_types": sorted(intent_set),
         "complexity_levels": ["simple", "medium", "complex", "expert"]
     }
 
@@ -776,7 +939,7 @@ def build_match_query(
     end_date: Optional[str] = None,
     project_name: Optional[str] = None
 ) -> dict:
-    """构建匹配查询条件"""
+    """构建匹配查询条件（同步版本，不展开标签）"""
     match_query = {}
     
     if domain:
@@ -787,6 +950,47 @@ def build_match_query(
         match_query["metadata.intent_type"] = intent_type
     if project_name:
         match_query["project_name"] = {"$regex": project_name, "$options": "i"}
+    
+    if start_date or end_date:
+        date_query = {}
+        if start_date:
+            try:
+                date_query["$gte"] = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                date_query["$lte"] = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        if date_query:
+            match_query["timestamp"] = date_query
+    
+    return match_query
+
+
+async def build_match_query_async(
+    domain: Optional[str] = None,
+    model: Optional[str] = None,
+    intent_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    project_name: Optional[str] = None
+) -> dict:
+    """构建匹配查询条件（异步版本，支持标签展开）"""
+    match_query = {}
+    
+    if domain:
+        domain_filter = await build_domain_filter(domain)
+        match_query.update(domain_filter)
+    if model:
+        match_query["metadata.model"] = {"$regex": model, "$options": "i"}
+    if intent_type:
+        intent_filter = await build_intent_filter(intent_type)
+        match_query.update(intent_filter)
+    if project_name:
+        project_filter = await build_project_filter(project_name)
+        match_query.update(project_filter)
     
     if start_date or end_date:
         date_query = {}
@@ -826,7 +1030,7 @@ async def get_stats_overview(
         end_date: 结束日期
         project_name: 过滤项目名称
     """
-    match_query = build_match_query(domain, model, intent_type, start_date, end_date, project_name)
+    match_query = await build_match_query_async(domain, model, intent_type, start_date, end_date, project_name)
     
     if match_query:
         total_count = await Conversation.find(match_query).count()
@@ -892,8 +1096,8 @@ async def get_domain_distribution(
     end_date: Optional[str] = None,
     project_name: Optional[str] = None
 ):
-    """获取领域分布统计"""
-    match_query = build_match_query(start_date=start_date, end_date=end_date, project_name=project_name)
+    """获取领域分布统计（已应用标签映射）"""
+    match_query = await build_match_query_async(start_date=start_date, end_date=end_date, project_name=project_name)
     
     pipeline = []
     if match_query:
@@ -913,6 +1117,11 @@ async def get_domain_distribution(
     
     results = await run_aggregation(pipeline)
     
+    # 应用标签映射
+    domain_mapping = await get_tag_mappings("domain")
+    if domain_mapping:
+        results = apply_tag_mapping_to_distribution(results, domain_mapping)
+    
     return results
 
 
@@ -923,7 +1132,7 @@ async def get_model_distribution(
     project_name: Optional[str] = None
 ):
     """获取模型使用分布统计"""
-    match_query = build_match_query(start_date=start_date, end_date=end_date, project_name=project_name)
+    match_query = await build_match_query_async(start_date=start_date, end_date=end_date, project_name=project_name)
     
     pipeline = []
     if match_query:
@@ -962,11 +1171,13 @@ async def get_daily_trend(
     
     match_query = {"timestamp": {"$gte": start, "$lte": end}}
     if domain:
-        match_query["metadata.domain"] = {"$regex": domain, "$options": "i"}
+        domain_filter = await build_domain_filter(domain)
+        match_query.update(domain_filter)
     if model:
         match_query["metadata.model"] = {"$regex": model, "$options": "i"}
     if project_name:
-        match_query["project_name"] = {"$regex": project_name, "$options": "i"}
+        project_filter = await build_project_filter(project_name)
+        match_query.update(project_filter)
     
     pipeline = [
         {"$match": match_query},
@@ -994,8 +1205,8 @@ async def get_intent_distribution(
     end_date: Optional[str] = None,
     project_name: Optional[str] = None
 ):
-    """获取意图类型分布统计"""
-    match_query = build_match_query(start_date=start_date, end_date=end_date, project_name=project_name)
+    """获取意图类型分布统计（已应用标签映射）"""
+    match_query = await build_match_query_async(start_date=start_date, end_date=end_date, project_name=project_name)
     
     pipeline = []
     if match_query:
@@ -1013,6 +1224,11 @@ async def get_intent_distribution(
     
     results = await run_aggregation(pipeline)
     
+    # 应用标签映射
+    intent_mapping = await get_tag_mappings("intent")
+    if intent_mapping:
+        results = apply_tag_mapping_to_distribution(results, intent_mapping)
+    
     return results
 
 
@@ -1024,7 +1240,7 @@ async def get_tools_usage(
     project_name: Optional[str] = None
 ):
     """获取工具使用统计"""
-    match_query = build_match_query(start_date=start_date, end_date=end_date, project_name=project_name)
+    match_query = await build_match_query_async(start_date=start_date, end_date=end_date, project_name=project_name)
     
     pipeline = []
     if match_query:
@@ -1053,8 +1269,8 @@ async def get_project_distribution(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ):
-    """获取项目分布统计"""
-    match_query = build_match_query(start_date=start_date, end_date=end_date)
+    """获取项目分布统计（已应用标签映射）"""
+    match_query = await build_match_query_async(start_date=start_date, end_date=end_date)
     
     pipeline = []
     if match_query:
@@ -1073,5 +1289,10 @@ async def get_project_distribution(
     ])
     
     results = await run_aggregation(pipeline)
+    
+    # 应用标签映射
+    project_mapping = await get_tag_mappings("project")
+    if project_mapping:
+        results = apply_tag_mapping_to_distribution(results, project_mapping)
     
     return results

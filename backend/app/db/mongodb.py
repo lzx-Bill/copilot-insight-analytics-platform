@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.models.conversation import Conversation
 from app.models.session import Session
 from app.models.message import Message
+from app.models.category_tag import CategoryTag
 
 
 class Database:
@@ -26,7 +27,7 @@ async def connect_to_mongo():
     
     await init_beanie(
         database=db.database,
-        document_models=[Conversation, Session, Message]
+        document_models=[Conversation, Session, Message, CategoryTag]
     )
     
     print(f"✅ 已连接到 MongoDB: {settings.MONGODB_DB_NAME}")

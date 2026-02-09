@@ -109,7 +109,33 @@ has_error: false
 
 ## 🚀 快速开始
 
-### 方式一：Docker Compose 一键启动（推荐）
+### ⚡ 一键启动（Windows，最简单）
+
+```powershell
+# 1. 克隆项目
+git clone <your-repo-url>
+cd copilot-insight-platform
+
+# 2. 一键启动所有服务（自动检测端口、启动 Docker、后端、前端）
+.\start.ps1
+
+# 3. 访问应用
+# 🌐 前端界面: http://localhost:5173
+# 📡 后端 API: http://localhost:8847
+# 📖 API 文档: http://localhost:8847/docs
+
+# 4. 停止所有服务
+.\stop.ps1
+
+# 5. 查看服务状态
+.\status.ps1
+```
+
+> 📖 **完整文档**: [QUICK_START.md](QUICK_START.md) - 包含所有选项、故障排除、常见问题等
+
+---
+
+### 方式一：Docker Compose 完整启动（推荐生产环境）
 
 ```bash
 # 1. 克隆项目

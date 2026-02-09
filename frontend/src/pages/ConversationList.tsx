@@ -3,6 +3,7 @@ import { Card, Table, Tag, Space, Button, Modal, Descriptions, Input, message, S
 import { SearchOutlined, FilterOutlined, ReloadOutlined, DragOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conversationApi, Conversation, ListParams, UpdateConversationData } from '@/services/conversation';
+import { useTagMappings, applyMapping } from '@/hooks/useTagMappings';
 import { Resizable } from 'react-resizable';
 import 'react-resizable/css/styles.css';
 import dayjs from 'dayjs';
@@ -122,6 +123,9 @@ const ConversationList: React.FC = () => {
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null]>([null, null]);
   
   const queryClient = useQueryClient();
+  
+  // 获取标签映射
+  const tagMappings = useTagMappings();
   
   // 获取筛选选项
   const { data: filterOptions } = useQuery({
@@ -357,14 +361,20 @@ const ConversationList: React.FC = () => {
       dataIndex: 'project_name',
       key: 'project_name',
       ellipsis: true,
-      render: (text: string) => text ? <Tag color="purple">{text}</Tag> : '-',
+      render: (text: string) => {
+        const mapped = applyMapping(text, tagMappings.project);
+        return mapped ? <Tag color="purple">{mapped}</Tag> : '-';
+      },
     },
     domain: {
       title: '领域',
       dataIndex: ['metadata', 'domain'],
       key: 'domain',
       ellipsis: true,
-      render: (text: string) => text ? <Tag color="blue">{text}</Tag> : '-',
+      render: (text: string) => {
+        const mapped = applyMapping(text, tagMappings.domain);
+        return mapped ? <Tag color="blue">{mapped}</Tag> : '-';
+      },
     },
     question: {
       title: '问题',
@@ -400,7 +410,10 @@ const ConversationList: React.FC = () => {
       title: '意图',
       dataIndex: ['metadata', 'intent_type'],
       key: 'intent_type',
-      render: (text: string) => text ? <Tag>{text}</Tag> : '-',
+      render: (text: string) => {
+        const mapped = applyMapping(text, tagMappings.intent);
+        return mapped ? <Tag>{mapped}</Tag> : '-';
+      },
     },
     tokens: {
       title: 'Token',
@@ -428,7 +441,7 @@ const ConversationList: React.FC = () => {
         </Space>
       ),
     },
-  }), [columnWidths]);
+  }), [columnWidths, tagMappings]);
 
   // 根据顺序生成带宽度的列
   const columns = useMemo(() => {
@@ -599,7 +612,7 @@ const ConversationList: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="项目" span={2}>
               {selectedConversation.project_name ? 
-                <Tag color="purple">{selectedConversation.project_name}</Tag> : '-'}
+                <Tag color="purple">{applyMapping(selectedConversation.project_name, tagMappings.project)}</Tag> : '-'}
             </Descriptions.Item>
             <Descriptions.Item label="时间" span={1}>
               {dayjs(selectedConversation.timestamp).format('YYYY-MM-DD HH:mm:ss')}
@@ -609,7 +622,7 @@ const ConversationList: React.FC = () => {
                 `${(selectedConversation.metadata.response_time_ms / 1000).toFixed(1)}s` : '-'}
             </Descriptions.Item>
             <Descriptions.Item label="领域">
-              {selectedConversation.metadata.domain || '-'}
+              {applyMapping(selectedConversation.metadata.domain, tagMappings.domain) || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="子领域">
               {selectedConversation.metadata.sub_domain || '-'}
@@ -621,7 +634,7 @@ const ConversationList: React.FC = () => {
               {selectedConversation.metadata.mode || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="意图类型">
-              {selectedConversation.metadata.intent_type || '-'}
+              {applyMapping(selectedConversation.metadata.intent_type, tagMappings.intent) || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="复杂度">
               {selectedConversation.metadata.complexity_level || '-'}

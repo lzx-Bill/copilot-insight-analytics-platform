@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import DataImport from './pages/DataImport';
 import ConversationList from './pages/ConversationList';
 import Analytics from './pages/Analytics';
+import TagManagement from './pages/TagManagement';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ const App: React.FC = () => {
               <Route path="/import" element={<DataImport />} />
               <Route path="/conversations" element={<ConversationList />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/tags" element={<TagManagement />} />
             </Routes>
           </Layout>
         </BrowserRouter>
