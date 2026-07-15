@@ -20,13 +20,13 @@ logger = setup_logging()
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动
-    logger.info(f"🚀 启动 {settings.PROJECT_NAME}")
+    logger.info(f"启动 {settings.PROJECT_NAME}")
     await connect_to_mongo()
     
     yield
     
     # 关闭
-    logger.info("👋 关闭应用")
+    logger.info("关闭应用")
     await close_mongo_connection()
 
 

@@ -283,10 +283,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ## 🔗 相关文档
 
-- [完整部署文档](./docs/DEPLOYMENT.md)
+- [项目主页](./README.md)
 - [开发指南](./docs/DEVELOPMENT.md)
-- [快速开始](./GET_STARTED.md)
-- [本地开发](./LOCAL_DEV.md)
 
 ---
 

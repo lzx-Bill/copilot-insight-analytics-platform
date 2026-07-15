@@ -4,6 +4,7 @@ MongoDB 数据库连接
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from beanie import init_beanie
 from typing import Optional
+from loguru import logger
 
 from app.core.config import settings
 from app.models.conversation import Conversation
@@ -30,7 +31,7 @@ async def connect_to_mongo():
         document_models=[Conversation, Session, Message, CategoryTag]
     )
     
-    print(f"✅ 已连接到 MongoDB: {settings.MONGODB_DB_NAME}")
+    logger.info(f"已连接到 MongoDB: {settings.MONGODB_DB_NAME}")
 
 
 def get_database() -> AsyncIOMotorDatabase:
@@ -42,4 +43,4 @@ async def close_mongo_connection():
     """关闭 MongoDB 连接"""
     if db.client:
         db.client.close()
-        print("❌ MongoDB 连接已关闭")
+        logger.info("MongoDB 连接已关闭")

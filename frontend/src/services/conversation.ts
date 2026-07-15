@@ -269,7 +269,7 @@ export const conversationApi = {
   },
 
   // 每日趋势
-  getDailyTrend: async (params?: { days?: number; domain?: string; model?: string; project_name?: string }): Promise<DailyTrend[]> => {
+  getDailyTrend: async (params?: StatsParams & { days?: number }): Promise<DailyTrend[]> => {
     return apiClient.get('/conversations/stats/daily-trend', { params });
   },
 

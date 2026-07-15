@@ -63,7 +63,8 @@ def test_parse_single_conversation():
     
     assert len(conversations) == 1
     
-    conv = conversations[0]
+    result = conversations[0]
+    conv = result.conversation
     
     # 检查基本信息
     assert conv.session_id == "7f3e9c4a-2b1d-4e8f-9a3c-5d6e7f8g9h0i"
@@ -78,6 +79,8 @@ def test_parse_single_conversation():
     assert conv.metadata.model == "Claude Sonnet 4.5"
     assert conv.metadata.estimated_cost == 0.038
     assert conv.metadata.tool_count == 2
+    assert conv.timestamp.isoformat() == "2026-01-08T15:42:18+00:00"
+    assert len(result.messages) == 2
 
 
 def test_extract_metadata():

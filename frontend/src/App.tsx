@@ -27,7 +27,10 @@ const App: React.FC = () => {
         theme={{
           algorithm: theme.defaultAlgorithm,
           token: {
-            colorPrimary: '#1890ff',
+            colorPrimary: '#5b5bd6',
+            colorBgLayout: '#f4f6fb',
+            borderRadius: 12,
+            fontFamily: "Inter, 'Segoe UI', system-ui, sans-serif",
           },
         }}
       >

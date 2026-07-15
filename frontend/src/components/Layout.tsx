@@ -7,6 +7,7 @@ import {
   SearchOutlined,
   BarChartOutlined,
   TagsOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = AntLayout;
@@ -53,18 +54,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   return (
-    <AntLayout style={{ minHeight: '100vh' }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed}>
-        <div style={{ 
-          height: 64, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          color: 'white',
-          fontSize: collapsed ? 16 : 18,
-          fontWeight: 'bold'
-        }}>
-          {collapsed ? 'CIAP' : 'Copilot Insight'}
+    <AntLayout className="app-shell">
+      <Sider className="app-sider" width={240} collapsible collapsed={collapsed} onCollapse={setCollapsed}>
+        <div className={`brand ${collapsed ? 'brand-collapsed' : ''}`}>
+          <div className="brand-mark"><LineChartOutlined /></div>
+          {!collapsed && (
+            <div>
+              <div className="brand-name">Copilot Insight</div>
+              <div className="brand-caption">Analytics workspace</div>
+            </div>
+          )}
         </div>
         <Menu
           theme="dark"
@@ -75,17 +74,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         />
       </Sider>
       <AntLayout>
-        <Header style={{ padding: 0, background: colorBgContainer }}>
-          <div style={{ 
-            paddingLeft: 24, 
-            fontSize: 20, 
-            fontWeight: 'bold' 
-          }}>
-            Copilot Insight Analytics Platform
+        <Header className="app-header" style={{ background: colorBgContainer }}>
+          <div>
+            <div className="header-title">Copilot Insight Analytics Platform</div>
+            <div className="header-subtitle">Local-first · Your conversations stay with you</div>
           </div>
         </Header>
-        <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280 }}>
-          {children}
+        <Content className="app-content">
+          <div className="content-frame">{children}</div>
         </Content>
       </AntLayout>
     </AntLayout>

@@ -192,17 +192,26 @@ async def check_duplicate(conversation) -> bool:
 
 async def save_parse_result(result: ParseResult) -> bool:
     """保存解析结果（包括对话和消息）"""
+    conversation = Conversation(**result.conversation.model_dump())
+    saved_messages = []
     try:
         # 保存对话
-        await result.conversation.insert()
+        await conversation.insert()
         
         # 保存消息
-        for message in result.messages:
+        for parsed_message in result.messages:
+            message = Message(**parsed_message.model_dump())
             await message.insert()
+            saved_messages.append(message)
         
         return True
     except Exception as e:
         logger.error(f"保存解析结果失败: {e}")
+        # ponytail: standalone MongoDB 无事务支持，失败时做尽力回滚；改为副本集后再用事务。
+        for message in saved_messages:
+            await message.delete()
+        if conversation.id:
+            await conversation.delete()
         return False
 
 
@@ -1161,23 +1170,20 @@ async def get_daily_trend(
     days: int = 30,
     domain: Optional[str] = None,
     model: Optional[str] = None,
-    project_name: Optional[str] = None
+    project_name: Optional[str] = None,
+    intent_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ):
     """获取每日趋势统计"""
     from datetime import timedelta
     
-    end = datetime.utcnow()
-    start = end - timedelta(days=days)
-    
-    match_query = {"timestamp": {"$gte": start, "$lte": end}}
-    if domain:
-        domain_filter = await build_domain_filter(domain)
-        match_query.update(domain_filter)
-    if model:
-        match_query["metadata.model"] = {"$regex": model, "$options": "i"}
-    if project_name:
-        project_filter = await build_project_filter(project_name)
-        match_query.update(project_filter)
+    match_query = await build_match_query_async(
+        domain, model, intent_type, start_date, end_date, project_name
+    )
+    if not start_date and not end_date:
+        end = datetime.utcnow()
+        match_query["timestamp"] = {"$gte": end - timedelta(days=days), "$lte": end}
     
     pipeline = [
         {"$match": match_query},

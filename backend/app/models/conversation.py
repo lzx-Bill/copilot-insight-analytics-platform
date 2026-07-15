@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from beanie import Document
 from pydantic import BaseModel, Field
+from pymongo import ASCENDING, IndexModel
 
 
 class ToolUsage(BaseModel):
@@ -93,8 +94,11 @@ class Conversation(Document):
             [("metadata.domain", 1)],
             [("metadata.model", 1)],
             [("tags", 1)],
-            # session_id + question_id 联合唯一索引
-            [("session_id", 1), ("question_id", 1)],
+            IndexModel(
+                [("session_id", ASCENDING), ("question_id", ASCENDING)],
+                unique=True,
+                name="session_question_unique",
+            ),
         ]
 
 

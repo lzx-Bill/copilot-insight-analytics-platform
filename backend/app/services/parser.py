@@ -7,17 +7,39 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from app.models.conversation import (
-    Conversation, ConversationContent, Metadata, 
+    ConversationContent, Metadata,
     TokenInfo, ToolUsage
 )
-from app.models.message import Message, MessageRole
+from app.models.message import MessageRole
+
+
+class ParsedConversation(BaseModel):
+    """数据库无关的解析结果，便于独立测试解析器。"""
+    session_id: str
+    question_id: str
+    timestamp: datetime
+    project_name: Optional[str] = None
+    conversation: ConversationContent
+    metadata: Metadata
+
+
+class ParsedMessage(BaseModel):
+    """待持久化的消息。"""
+    conversation_id: str
+    session_id: str
+    role: MessageRole
+    content: str
+    timestamp: datetime
+    context_files: List[str] = Field(default_factory=list)
+    sequence: int = 0
 
 
 class ParseResult:
     """解析结果"""
-    def __init__(self, conversation: Conversation, messages: List[Message]):
+    def __init__(self, conversation: ParsedConversation, messages: List[ParsedMessage]):
         self.conversation = conversation
         self.messages = messages
 
@@ -152,11 +174,13 @@ class CopilotParser:
         project_name = metadata_dict.get('project_name')
         
         # 解析时间戳
-        timestamp_str = metadata_dict.get('timestamp')
-        if timestamp_str:
+        timestamp_value = metadata_dict.get('timestamp')
+        if isinstance(timestamp_value, datetime):
+            timestamp = timestamp_value
+        elif timestamp_value:
             try:
-                timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            except:
+                timestamp = datetime.fromisoformat(str(timestamp_value).replace('Z', '+00:00'))
+            except ValueError:
                 timestamp = datetime.utcnow()
         else:
             timestamp = datetime.utcnow()
@@ -175,7 +199,7 @@ class CopilotParser:
         metadata = self._build_metadata(metadata_dict)
         
         # 创建 Conversation 对象
-        conversation = Conversation(
+        conversation = ParsedConversation(
             session_id=session_id,
             question_id=question_id,
             timestamp=timestamp,
@@ -188,7 +212,7 @@ class CopilotParser:
         messages = []
         
         # 用户消息
-        user_message = Message(
+        user_message = ParsedMessage(
             conversation_id=question_id,
             session_id=session_id,
             role=MessageRole.USER,
@@ -200,7 +224,7 @@ class CopilotParser:
         messages.append(user_message)
         
         # 助手消息
-        assistant_message = Message(
+        assistant_message = ParsedMessage(
             conversation_id=question_id,
             session_id=session_id,
             role=MessageRole.ASSISTANT,

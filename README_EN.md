@@ -1,100 +1,83 @@
-# 🔍 Copilot Insight Analytics Platform (CIAP)
+<div align="center">
 
-**README Language**: [中文](README.md) | English
+# Copilot Insight Analytics Platform
 
-A visual analytics platform for GitHub Copilot usage data, helping you understand efficiency and usage patterns of AI coding assistants.
+**Turn GitHub Copilot conversations into searchable, visual, self-hosted insights.**
 
----
+[中文](README.md) · [Quick Start](QUICK_START.md) · [Development](docs/DEVELOPMENT.md)
 
-## ✨ Features
+[![CI](https://github.com/lzx-Bill/copilot-insight-analytics-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/lzx-Bill/copilot-insight-analytics-platform/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-5b5bd6.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111827)](frontend/package.json)
 
-| Feature | Description |
-|---------|-------------|
-| 📥 **Data Import** | Paste text or upload Markdown files |
-| 🔍 **Smart Parsing** | Auto-parse Copilot conversations + metadata |
-| 📊 **Dashboard** | KPI overview (tokens, cost, response time) |
-| 📈 **Analytics** | Domain and model distribution insights |
-| 💬 **Conversation Browser** | Browse and manage historical conversations |
+</div>
 
----
+![CIAP Dashboard](docs/images/dashboard.png)
 
-## ⚠️ Prerequisite: Collecting Data
+CIAP parses exported Copilot conversations, stores them in your own MongoDB, and provides dashboards for domains, models, estimated cost, tokens, trends, tools, and projects.
 
-This platform **does not** generate data automatically. You must export Copilot conversations with metadata.
+> Token, cost, and response-time values currently come from AI-generated metadata. They are estimates, not official GitHub billing or telemetry.
 
-1) Add metadata rules in your project’s `.github/copilot-instructions.md`.
-2) Use Copilot normally.
-3) Export conversations (with metadata) as `.md` files and import here.
+## Features
 
----
+- Paste text or upload multiple Markdown/text files.
+- Parse questions, answers, timestamps, models, tokens, costs, and tool usage.
+- Search, filter, edit, favorite, delete, and categorize conversations.
+- Explore responsive dashboards and multidimensional analytics.
+- Keep data local with a React + FastAPI + MongoDB stack.
 
-## 🚀 Quick Start (Docker Compose)
+## Quick start
 
 ```bash
-# 1. Clone
-git clone <your-repo-url>
-cd copilot-insight-platform
-
-# 2. Copy env template (recommended)
+git clone https://github.com/lzx-Bill/copilot-insight-analytics-platform.git
+cd copilot-insight-analytics-platform
 cp .env.example .env
-
-# 3. Start services
-docker-compose up -d
-
-# 4. Check status
-docker-compose ps
-
-# 5. Open
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:8847
-# API Docs: http://localhost:8847/docs
+docker compose up -d --build
 ```
 
----
+Open <http://localhost:5173>. API docs are available at <http://localhost:8847/docs>.
 
-## ⚙️ Configuration
+The current Compose setup runs Vite and Uvicorn in development mode. It is intended for local use, not production deployment.
 
-All settings are in `.env`.
+## How data flows
 
-| Key | Default | Notes |
-|-----|---------|-------|
-| `BACKEND_PORT` | 8847 | Backend API port |
-| `FRONTEND_PORT` | 5173 | Frontend port |
-| `MONGODB_PORT` | 27847 | MongoDB port |
-| `MONGODB_ROOT_USERNAME` | ciap_admin | MongoDB user |
-| `MONGODB_ROOT_PASSWORD` | change_me | MongoDB password (set your own) |
-| `REDIS_PORT` | 6847 | Redis port |
-| `REDIS_PASSWORD` | change_me | Redis password (set your own) |
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| **Frontend** | React 18 + TypeScript + Vite + Ant Design + ECharts |
-| **Backend** | FastAPI + Python 3.11+ + Beanie ODM |
-| **Database** | MongoDB 7.0 |
-| **Cache** | Redis 7 |
-| **Container** | Docker + Docker Compose |
-
----
-
-## 📁 Project Structure
-
+```text
+Copilot response + YAML metadata
+              ↓
+Paste text or upload Markdown
+              ↓
+CIAP parser → MongoDB
+              ↓
+Dashboard / Analytics / Search
 ```
-copilot-insight-platform/
-├── .env
-├── .env.example
-├── docker-compose.yml
-├── README.md
-├── README_EN.md
-├── backend/
-│   ├── app/
-│   ├── tests/
-│   └── ...
-├── frontend/
-│   ├── src/
-│   └── ...
-└── docs/
+
+Copy the response-metadata section from [.github/copilot-instructions.md](.github/copilot-instructions.md#必须执行的响应元数据追加) into your project, use Copilot normally, then import the exported conversation.
+
+## Stack
+
+- React 18, TypeScript, Vite, Ant Design, ECharts, TanStack Query
+- FastAPI, Beanie, Motor, PyYAML
+- MongoDB 7 and Docker Compose
+
+## Validate locally
+
+```bash
+cd backend && python -m pytest -q
+cd ../frontend && npm run lint && npm run build
 ```
+
+## Roadmap
+
+- [x] Import, CRUD, filtering, analytics, and category mapping
+- [x] Responsive dashboard
+- [ ] Parse preview and field correction before import
+- [ ] JSON / CSV / Markdown export
+- [ ] Real telemetry adapters
+- [ ] Authentication and production images
+
+Contributions are welcome, especially around parser compatibility, export formats, and documentation examples.
+
+## License
+
+[MIT](LICENSE)

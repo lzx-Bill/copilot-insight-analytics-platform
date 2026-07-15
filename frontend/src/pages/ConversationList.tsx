@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card, Table, Tag, Space, Button, Modal, Descriptions, Input, message, Select, DatePicker, Row, Col, Tooltip, Form, InputNumber, Switch, Tabs, Divider } from 'antd';
 import { SearchOutlined, FilterOutlined, ReloadOutlined, DragOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -149,6 +149,7 @@ const ConversationList: React.FC = () => {
       search: filters.search,
       start_date: filters.start_date,
       end_date: filters.end_date,
+      project_name: filters.project_name,
     }),
   });
 
@@ -348,7 +349,7 @@ const ConversationList: React.FC = () => {
   };
 
   // 列定义
-  const getColumnDefinitions = useCallback(() => ({
+  const getColumnDefinitions = () => ({
     timestamp: {
       title: '时间',
       dataIndex: 'timestamp',
@@ -441,10 +442,10 @@ const ConversationList: React.FC = () => {
         </Space>
       ),
     },
-  }), [columnWidths, tagMappings]);
+  });
 
   // 根据顺序生成带宽度的列
-  const columns = useMemo(() => {
+  const columns = (() => {
     const defs = getColumnDefinitions();
     return columnOrder
       .filter(key => (defs as any)[key])
@@ -465,7 +466,7 @@ const ConversationList: React.FC = () => {
           },
         }),
       }));
-  }, [columnOrder, columnWidths, handleResize, getColumnDefinitions, dragState]);
+  })();
 
   // 自定义表头组件
   const components = {
